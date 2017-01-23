@@ -28,19 +28,19 @@
 package com.github.jonathanxd.codeapi.conversions.test
 
 import com.github.jonathanxd.codeapi.CodeAPI
-import com.github.jonathanxd.codeapi.CodeSource
 import com.github.jonathanxd.codeapi.MutableCodeSource
+import com.github.jonathanxd.codeapi.base.BodyHolder
+import com.github.jonathanxd.codeapi.common.CodeModifier
 import com.github.jonathanxd.codeapi.conversions.extend
-import com.github.jonathanxd.codeapi.interfaces.Bodied
 import org.junit.Test
-import java.lang.reflect.Modifier
+import java.util.*
 
 class TestConversion {
 
     @Test
     fun test() {
         val declaration = CodeAPI.aClassBuilder()
-                .withModifiers(Modifier.PUBLIC)
+                .withModifiers(EnumSet.of(CodeModifier.PUBLIC))
                 .withQualifiedName("com.Test")
                 .withBody(MutableCodeSource())
                 .build()
@@ -49,12 +49,12 @@ class TestConversion {
         fun print(any: Any, dash: String = "") {
             println("$dash$any")
 
-            if(any is Bodied) {
-                any.body.orElse(CodeSource.empty()).forEach { print(it, dash + "  ") }
+            if (any is BodyHolder) {
+                any.body.forEach { print(it, dash + "  ") }
             }
         }
 
-        declaration.body.get().forEach { print(it, "") }
+        declaration.body.forEach { print(it, "") }
     }
 
 }

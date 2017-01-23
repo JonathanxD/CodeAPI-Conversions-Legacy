@@ -27,25 +27,25 @@
  */
 package com.github.jonathanxd.codeapi.conversions
 
-import com.github.jonathanxd.codeapi.helper.Helper
-import com.github.jonathanxd.codeapi.impl.CodeField
-import com.github.jonathanxd.codeapi.impl.CodeMethod
-import com.github.jonathanxd.codeapi.interfaces.TypeDeclaration
+import com.github.jonathanxd.codeapi.base.FieldDeclaration
+import com.github.jonathanxd.codeapi.base.MethodDeclaration
+import com.github.jonathanxd.codeapi.base.TypeDeclaration
+import com.github.jonathanxd.codeapi.util.codeType
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 
 /**
- * Searches the [codeMethod] in this [Class].
+ * Searches [methodDeclaration] in this [Class].
  */
-fun <T : Any> Class<T>.find(codeMethod: CodeMethod): Method? {
+fun <T : Any> Class<T>.find(methodDeclaration: MethodDeclaration): Method? {
     val filter = filter@ { it: Method ->
         val name = it.name
         val returnType = it.returnType.codeType
         val parameterTypes = it.parameterTypes.map { it.codeType }
 
-        return@filter name == codeMethod.name
-                && returnType.`is`(codeMethod.returnType.get())
-                && parameterTypes.isEqual(codeMethod.parameters)
+        return@filter name == methodDeclaration.name
+                && returnType.`is`(methodDeclaration.returnType)
+                && parameterTypes.isEqual(methodDeclaration.parameters)
     }
 
     return this.declaredMethods.first(filter) ?: this.methods.first(filter)
@@ -53,15 +53,15 @@ fun <T : Any> Class<T>.find(codeMethod: CodeMethod): Method? {
 }
 
 /**
- * Searches the [codeField] in this [Class].
+ * Searches [fieldDeclaration] in this [Class].
  */
-fun <T : Any> Class<T>.find(codeField: CodeField): Field? {
+fun <T : Any> Class<T>.find(fieldDeclaration: FieldDeclaration): Field? {
     val filter = filter@ { it: Field ->
         val name = it.name
         val type = it.type.codeType
 
-        return@filter name == codeField.name
-                && type.`is`(codeField.variableType)
+        return@filter name == fieldDeclaration.name
+                && type.`is`(fieldDeclaration.type)
     }
 
     return this.declaredFields.first(filter) ?: this.fields.first(filter)
@@ -73,7 +73,7 @@ fun <T : Any> Class<T>.find(codeField: CodeField): Field? {
  */
 fun <T : Any> Class<T>.find(typeDeclaration: TypeDeclaration): Class<*>? {
     val filter = filter@ { it: Class<*> ->
-        val type = Helper.getJavaType(it)
+        val type = it.codeType
 
         return@filter type.`is`(typeDeclaration)
     }

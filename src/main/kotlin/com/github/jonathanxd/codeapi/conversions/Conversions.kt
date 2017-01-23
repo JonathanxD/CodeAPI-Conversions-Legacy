@@ -30,55 +30,47 @@ package com.github.jonathanxd.codeapi.conversions
 import com.github.jonathanxd.codeapi.CodeAPI
 import com.github.jonathanxd.codeapi.CodePart
 import com.github.jonathanxd.codeapi.MutableCodeSource
-import com.github.jonathanxd.codeapi.builder.FieldBuilder
-import com.github.jonathanxd.codeapi.builder.MethodBuilder
-import com.github.jonathanxd.codeapi.common.CodeArgument
+import com.github.jonathanxd.codeapi.base.*
+import com.github.jonathanxd.codeapi.base.impl.MethodSpecificationImpl
+import com.github.jonathanxd.codeapi.builder.FieldDeclarationBuilder
+import com.github.jonathanxd.codeapi.builder.MethodDeclarationBuilder
 import com.github.jonathanxd.codeapi.common.CodeParameter
 import com.github.jonathanxd.codeapi.common.InvokeType
 import com.github.jonathanxd.codeapi.common.MethodType
-import com.github.jonathanxd.codeapi.helper.Helper
-import com.github.jonathanxd.codeapi.impl.CodeField
-import com.github.jonathanxd.codeapi.impl.CodeMethod
-import com.github.jonathanxd.codeapi.impl.MethodSpecImpl
-import com.github.jonathanxd.codeapi.interfaces.*
-import com.github.jonathanxd.codeapi.literals.Literal
-import com.github.jonathanxd.codeapi.literals.Literals
-import com.github.jonathanxd.codeapi.types.CodeType
-import com.github.jonathanxd.codeapi.types.LoadedCodeType
+import com.github.jonathanxd.codeapi.common.TypeSpec
+import com.github.jonathanxd.codeapi.literal.Literal
+import com.github.jonathanxd.codeapi.literal.Literals
+import com.github.jonathanxd.codeapi.type.CodeType
+import com.github.jonathanxd.codeapi.util.codeType
+import com.github.jonathanxd.codeapi.util.fromJavaModifiers
 import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.lang.reflect.Parameter
+import kotlin.reflect.KParameter
+import kotlin.reflect.jvm.jvmErasure
 
-val <T : Any> Class<T>.codeType: LoadedCodeType<T>
-    get() = this.toType()
-
-fun <T : Any> Class<T>.toType(): LoadedCodeType<T> =
-        Helper.getJavaType(this)
-
-fun <T : Any> LoadedCodeType<T>.toClass(): Class<T> =
-        this.loadedType
-
+@Suppress("UNCHECKED_CAST")
 fun <T : Any> Class<T>.toClassDeclaration(): ClassDeclaration =
         CodeAPI.aClassBuilder()
-                .withModifiers(this.modifiers)
+                .withModifiers(fromJavaModifiers(this.modifiers))
                 .withQualifiedName(this.canonicalName)
-                .withSuperClass(this.superclass)
-                .withImplementations(*this.interfaces)
+                .withSuperClass((this.superclass as Class<Any>).codeType)
+                .withImplementations(this.interfaces.map { it.codeType })
                 .withBody(MutableCodeSource())
                 .build()
 
 fun <T : Any> Class<T>.toInterfaceDeclaration(): InterfaceDeclaration =
         CodeAPI.anInterfaceBuilder()
-                .withModifiers(this.modifiers)
+                .withModifiers(fromJavaModifiers(this.modifiers))
                 .withQualifiedName(this.canonicalName)
-                .withImplementations(*this.interfaces)
+                .withImplementations(this.interfaces.map { it.codeType })
                 .withBody(MutableCodeSource())
                 .build()
 
 fun <T : Any> Class<T>.toAnnotationDeclaration(): AnnotationDeclaration =
         CodeAPI.annotationBuilder()
-                .withModifiers(this.modifiers)
+                .withModifiers(fromJavaModifiers(this.modifiers))
                 .withQualifiedName(this.canonicalName)
                 .withProperties(this.declaredMethods.map { CodeAPI.property(it.returnType.codeType, it.name, it.defaultValue) })
                 .withBody(MutableCodeSource())
@@ -94,16 +86,16 @@ fun <T : Any> Class<T>.toEnumDeclaration(): EnumDeclaration {
             .map {
                 CodeAPI.enumEntry(it.name,
                         if (abstractMethods.isNotEmpty())
-                            MutableCodeSource(abstractMethods.map { it.toCodeMethod() })
+                            MutableCodeSource(abstractMethods.map(Method::toMethodDeclaration))
                         else
                             null
                 )
             }
 
     return CodeAPI.enumBuilder()
-            .withModifiers(this.modifiers)
+            .withModifiers(fromJavaModifiers(this.modifiers))
             .withQualifiedName(this.canonicalName)
-            .withImplementations(*this.interfaces)
+            .withImplementations(this.interfaces.map { it.codeType })
             .withEntries(enumEntries)
             .withBody(MutableCodeSource())
             .build()
@@ -141,7 +133,7 @@ fun <T : Any> Class<T>.toStructure(includeFields: Boolean = true, includeMethods
 
     val declaration: TypeDeclaration = this.toDeclaration()
 
-    val body = declaration.body.get() as MutableCodeSource
+    val body = declaration.body as MutableCodeSource
 
     list += declaration
 
@@ -153,7 +145,7 @@ fun <T : Any> Class<T>.toStructure(includeFields: Boolean = true, includeMethods
                     includeSubClasses = includeSubClasses
             )
 
-            list += extracted.first().setOuterClass(declaration)
+            list += extracted.first().builder().withOuterClass(declaration).build()
 
             if (extracted.size > 1)
                 list += extracted.subList(1, extracted.size)
@@ -162,13 +154,13 @@ fun <T : Any> Class<T>.toStructure(includeFields: Boolean = true, includeMethods
 
     if (includeFields) {
         for (field in this.fields) {
-            body.add(field.toCodeField())
+            body.add(field.toFieldDeclaration())
         }
     }
 
     if (includeMethods) {
         for (method in this.declaredMethods) {
-            if (isValidImpl(method)) body.add(method.toCodeMethod())
+            if (isValidImpl(method)) body.add(method.toMethodDeclaration())
         }
     }
 
@@ -185,25 +177,25 @@ fun <T : Any> Class<T>.toStructure(includeFields: Boolean = true, includeMethods
  */
 @Suppress("UNCHECKED_CAST")
 fun <T : TypeDeclaration> T.extend(klass: Class<*>): T {
-    val body = this.body.map { it.toMutable() }.orElse(MutableCodeSource())
-    val type = Helper.getJavaType(klass)
+    val body = this.body.toMutable()
+    val type = klass.codeType
 
     for (method in klass.methods) {
         if (method.isAccessibleFrom(this, true)
                 && isValidImpl(method)) {
-            body.add(method.toCodeMethod(type))
+            body.add(method.toMethodDeclaration(type))
         }
     }
 
-    var declaration = this.setBody(body)
+    var declaration = this.builder().withBody(body).build()
 
 
     if (klass.isInterface) {
-        val implementer = declaration as Implementer
-        declaration = implementer.setImplementations(implementer.implementations + type) as TypeDeclaration
+        val implementer = declaration as ImplementationHolder
+        declaration = implementer.builder().withImplementations(implementer.implementations + type).build() as TypeDeclaration
     } else {
-        val extender = declaration as Extender
-        declaration = extender.setSuperType(type) as TypeDeclaration
+        val extender = declaration as SuperClassHolder
+        declaration = extender.builder().withSuperClass(type).build() as TypeDeclaration
     }
 
     return declaration as T
@@ -212,14 +204,14 @@ fun <T : TypeDeclaration> T.extend(klass: Class<*>): T {
 // Fields
 
 /**
- * Convert this [Field] structure to [CodeField].
+ * Convert this [Field] structure to [FieldDeclaration].
  *
- * @return [CodeField] structure from [Field].
+ * @return [FieldDeclaration] structure from [Field].
  */
-fun Field.toCodeField(): CodeField =
-        FieldBuilder.builder()
+fun Field.toFieldDeclaration(): FieldDeclaration =
+        FieldDeclarationBuilder.builder()
+                .withModifiers(fromJavaModifiers(this.modifiers))
                 .withType(this.type.codeType)
-                .withModifiers(this.modifiers)
                 .withName(this.name)
                 .build()
 
@@ -229,57 +221,64 @@ fun Field.toCodeField(): CodeField =
  * @param target Target
  * @return [VariableAccess] to this [Field]
  */
-fun Field.createAccess(target: CodePart?): VariableAccess =
-        Helper.accessVariable(
+fun Field.createAccess(target: CodePart?): FieldAccess =
+        CodeAPI.accessField(
                 this.declaringClass.codeType,
                 target,
-                this.name,
-                this.type.codeType)
+                this.type.codeType,
+                this.name
+        )
 
 /**
  * Create static access to this [Field].
  *
  * @return **Static** [VariableAccess] to this [Field].
  */
-fun Field.createStaticAccess(): VariableAccess =
+fun Field.createStaticAccess(): FieldAccess =
         this.createAccess(null)
 
 // Method
 
 /**
- * Convert this [Method] to [CodeMethod].
+ * Convert this [Method] to [MethodDeclaration].
  *
- * @return [CodeMethod].
+ * @return [MethodDeclaration].
  */
-fun Method.toCodeMethod(): CodeMethod =
-        MethodBuilder.builder()
+fun Method.toMethodDeclaration(): MethodDeclaration =
+        MethodDeclarationBuilder.builder()
                 .withModifiers(fixModifiers(this.modifiers))
                 .withName(this.name)
-                .withReturnType(this.returnType)
-                .withParameters(this.parameters.map { CodeAPI.parameter(it.type, it.name) })
+                .withReturnType(this.returnType.codeType)
+                .withParameters(this.parameters.let {
+                    val names = this.parameterNames
+
+                    it.mapIndexed { i, it ->
+                        CodeAPI.parameter(it.type, names[i])
+                    }
+                })
                 .withBody(MutableCodeSource())
                 .build()
 
 /**
- * Convert this [Method] structure to [CodeMethod] structure invoking the super class method.
+ * Convert this [Method] structure to [MethodDeclaration] structure invoking the super class method.
  *
  * @param superClass super class to invoke
- * @return [CodeMethod] structure from [Method] invoking super class method.
+ * @return [MethodDeclaration] structure from [Method] invoking super class method.
  */
-fun Method.toCodeMethod(superClass: CodeType): CodeMethod =
-        this.toCodeMethod().setBody(
+fun Method.toMethodDeclaration(superClass: CodeType): MethodDeclaration =
+        this.toMethodDeclaration().builder().withBody(
                 MutableCodeSource(
-                        arrayOf(CodeAPI.returnValue(this.returnType, Helper.invoke(
-                                InvokeType.INVOKE_SPECIAL,
-                                superClass,
-                                CodeAPI.accessThis(),
-                                MethodSpecImpl(this.name,
+                        arrayOf<CodePart>(CodeAPI.returnValue(this.returnType,
+                                CodeAPI.invoke(
+                                        InvokeType.INVOKE_SPECIAL,
+                                        superClass,
+                                        CodeAPI.accessThis(),
+                                        this.name,
                                         CodeAPI.typeSpec(this.returnType, *this.parameterTypes),
-                                        this.parameters.map { it.toCodeArgument() },
-                                        MethodType.METHOD)
-                        )))
+                                        this.parameters.map { it.toCodeArgument() }
+                                )))
                 )
-        )
+        ).build()
 
 /**
  * Convert [Method] to [MethodSpecification] with [arguments]
@@ -287,11 +286,19 @@ fun Method.toCodeMethod(superClass: CodeType): CodeMethod =
  * @param arguments Arguments to pass to method
  * @return [MethodSpecification] of this [Method].
  */
-fun Method.toSpec(arguments: List<CodeArgument>): MethodSpecification =
-        MethodSpecImpl(this.name,
-                CodeAPI.typeSpec(this.returnType, *this.parameterTypes),
-                arguments
+fun Method.toSpec(): MethodSpecification =
+        MethodSpecificationImpl(
+                methodName = this.name,
+                description = CodeAPI.typeSpec(this.returnType, *this.parameterTypes),
+                methodType = MethodType.METHOD
         )
+
+/**
+ * Convert [Method] to [TypeSpec]
+ *
+ * @return [TypeSpec] of this [Method].
+ */
+fun Method.toTypeSpec(): TypeSpec = CodeAPI.typeSpec(this.returnType, *this.parameterTypes)
 
 /**
  * Create a [MethodInvocation] to this [Method].
@@ -300,22 +307,24 @@ fun Method.toSpec(arguments: List<CodeArgument>): MethodSpecification =
  * @param arguments Arguments to pass to method.
  * @return The invocation.
  */
-fun Method.createInvocation(target: CodePart?, arguments: List<CodeArgument>): MethodInvocation =
-        Helper.invoke(
+fun Method.createInvocation(target: CodePart?, arguments: List<CodePart>): MethodInvocation =
+        CodeAPI.invoke(
                 if (target == null) InvokeType.INVOKE_STATIC else InvokeType.get(this.declaringClass.codeType),
                 this.declaringClass.codeType,
                 target ?: this.declaringClass.codeType,
-                this.toSpec(arguments)
+                this.name,
+                this.toTypeSpec(),
+                arguments
         )
 
 
 /**
- * Create a static [MethodInvocation] to this [method].
+ * Create a static [MethodInvocation] to [this method][this].
  *
  * @param arguments Arguments to pass to method.
  * @return The invocation.
  */
-fun Method.createStaticInvocation(arguments: List<CodeArgument>): MethodInvocation =
+fun Method.createStaticInvocation(arguments: List<CodePart>): MethodInvocation =
         this.createInvocation(null, arguments)
 
 /**
@@ -324,15 +333,17 @@ fun Method.createStaticInvocation(arguments: List<CodeArgument>): MethodInvocati
  * @param arguments Arguments to pass to method.
  * @return The invocation.
  */
-fun Method.createInvocationThis(arguments: List<CodeArgument>): MethodInvocation =
+fun Method.createInvocationThis(arguments: List<CodePart>): MethodInvocation =
         this.createInvocation(CodeAPI.accessThis(), arguments)
 
 // Parameters And Arguments
+fun KParameter.toCodeParameter(): CodeParameter = CodeAPI.parameter(this.type.jvmErasure.codeType, this.name)
+
 fun Parameter.toCodeParameter(): CodeParameter = CodeAPI.parameter(this.type.codeType, this.name)
 
-fun Parameter.toCodeArgument(): CodeArgument = CodeAPI.argument(CodeAPI.accessLocalVariable(this.type.codeType, this.name), this.type)
+fun Parameter.toCodeArgument(): CodePart = CodeAPI.accessLocalVariable(this.type.codeType, this.name)
 
-fun CodeParameter.toCodeArgument(): CodeArgument = CodeAPI.argument(CodeAPI.accessLocalVariable(this.requiredType, this.name), this.requiredType)
+fun CodeParameter.toCodeArgument(): CodePart = CodeAPI.accessLocalVariable(this.type, this.name)
 
 // Any
 

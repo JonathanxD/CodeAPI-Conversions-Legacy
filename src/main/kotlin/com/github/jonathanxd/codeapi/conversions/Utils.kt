@@ -27,12 +27,14 @@
  */
 package com.github.jonathanxd.codeapi.conversions
 
+import com.github.jonathanxd.codeapi.base.TypeDeclaration
 import com.github.jonathanxd.codeapi.common.CodeModifier
-import com.github.jonathanxd.codeapi.common.CodeParameter
-import com.github.jonathanxd.codeapi.interfaces.TypeDeclaration
-import com.github.jonathanxd.codeapi.types.CodeType
+import com.github.jonathanxd.codeapi.util.fromJavaModifiers
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.util.*
+import kotlin.reflect.full.valueParameters
+import kotlin.reflect.jvm.kotlinFunction
 
 @JvmOverloads
 fun Method.isAccessibleFrom(typeDeclaration: TypeDeclaration, override: Boolean = false): Boolean {
@@ -43,18 +45,13 @@ fun Method.isAccessibleFrom(typeDeclaration: TypeDeclaration, override: Boolean 
     return if (Modifier.isPublic(modifiers)
             || (override && Modifier.isProtected(modifiers)))
         true
-    else if (package_ != null && methodPackage != null
-            && package_ == methodPackage) {
-        true
-    } else {
-        false
-    }
+    else methodPackage != null && package_ == methodPackage
 }
 
-fun fixModifiers(modifiers: Int): Collection<CodeModifier> = CodeModifier.extractModifiers(modifiers).let {
+fun fixModifiers(modifiers: Int): EnumSet<CodeModifier> = EnumSet.copyOf(fromJavaModifiers(modifiers).let {
     it.remove(CodeModifier.ABSTRACT)
     return@let it
-}!!
+})
 
 /**
  * Is the [method] valid for implementation
@@ -64,16 +61,19 @@ fun isValidImpl(method: Method) = !method.isBridge
         && !Modifier.isNative(method.modifiers)
         && !Modifier.isFinal(method.modifiers)
 
-fun <T: Any> Iterable<T>.isEqual(other: Iterable<*>): Boolean {
+fun <T : Any> Iterable<T>.isEqual(other: Iterable<*>): Boolean {
 
     val thisIterator = this.iterator()
     val otherIterator = other.iterator()
 
     while (thisIterator.hasNext() && otherIterator.hasNext()) {
-        if(thisIterator.next() != otherIterator.next())
+        if (thisIterator.next() != otherIterator.next())
             return false
 
     }
 
     return !thisIterator.hasNext() && !otherIterator.hasNext()
 }
+
+val Method.parameterNames: List<String>
+    get() = this.kotlinFunction?.valueParameters?.mapIndexed { i, it -> it.name ?: this.parameters[i].name } ?: this.parameters.map { it.name }
