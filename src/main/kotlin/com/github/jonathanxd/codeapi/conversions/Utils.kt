@@ -29,10 +29,12 @@ package com.github.jonathanxd.codeapi.conversions
 
 import com.github.jonathanxd.codeapi.base.TypeDeclaration
 import com.github.jonathanxd.codeapi.common.CodeModifier
+import com.github.jonathanxd.codeapi.common.CodeParameter
 import com.github.jonathanxd.codeapi.util.fromJavaModifiers
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.*
+import kotlin.reflect.KParameter
 import kotlin.reflect.full.valueParameters
 import kotlin.reflect.jvm.kotlinFunction
 
@@ -77,3 +79,9 @@ fun <T : Any> Iterable<T>.isEqual(other: Iterable<*>): Boolean {
 
 val Method.parameterNames: List<String>
     get() = this.kotlinFunction?.valueParameters?.mapIndexed { i, it -> it.name ?: this.parameters[i].name } ?: this.parameters.map { it.name }
+
+val Method.kotlinParameters: List<KParameter>?
+    get() = this.kotlinFunction?.valueParameters
+
+val Method.codeParameters: List<CodeParameter>
+    get() = this.kotlinFunction?.valueParameters?.map { it.toCodeParameter() } ?: this.parameters.map { it.toCodeParameter() }

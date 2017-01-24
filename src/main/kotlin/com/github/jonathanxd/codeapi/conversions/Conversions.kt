@@ -275,7 +275,7 @@ fun Method.toMethodDeclaration(superClass: CodeType): MethodDeclaration =
                                         CodeAPI.accessThis(),
                                         this.name,
                                         CodeAPI.typeSpec(this.returnType, *this.parameterTypes),
-                                        this.parameters.map { it.toCodeArgument() }
+                                        this.codeParameters.map { it.toCodeArgument() }
                                 )))
                 )
         ).build()
@@ -340,6 +340,8 @@ fun Method.createInvocationThis(arguments: List<CodePart>): MethodInvocation =
 fun KParameter.toCodeParameter(): CodeParameter = CodeAPI.parameter(this.type.jvmErasure.codeType, this.name)
 
 fun Parameter.toCodeParameter(): CodeParameter = CodeAPI.parameter(this.type.codeType, this.name)
+
+fun KParameter.toCodeArgument(): CodePart = CodeAPI.accessLocalVariable(this.type.jvmErasure.codeType, this.name)
 
 fun Parameter.toCodeArgument(): CodePart = CodeAPI.accessLocalVariable(this.type.codeType, this.name)
 
