@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.1.0-beta-18'
+    ext.kotlin_version = '1.1.0-rc-91'
     ext.dokka_version = '0.9.10'
 
     repositories {
@@ -19,7 +19,7 @@ plugins {
 }
 
 group 'com.github.jonathanxd'
-version '1.2.1-SNAPSHOT'
+version '1.2.2-SNAPSHOT'
 
 // IDE
 apply plugin: 'idea'
@@ -50,7 +50,7 @@ dependencies {
     compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
     // Utilities
-    compile 'com.github.JonathanxD:CodeAPI:3.0.2'
+    compile 'com.github.JonathanxD:CodeAPI:3.1.0'
     compile 'com.github.JonathanxD:JwIUtils:3.5.2'
 
     testCompile group: 'junit', name: 'junit', version: '4.11'

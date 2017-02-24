@@ -31,6 +31,7 @@ import com.github.jonathanxd.codeapi.base.TypeDeclaration
 import com.github.jonathanxd.codeapi.common.CodeModifier
 import com.github.jonathanxd.codeapi.common.CodeParameter
 import com.github.jonathanxd.codeapi.util.fromJavaModifiers
+import java.lang.reflect.Constructor
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.*
@@ -84,4 +85,13 @@ val Method.kotlinParameters: List<KParameter>?
     get() = this.kotlinFunction?.valueParameters
 
 val Method.codeParameters: List<CodeParameter>
+    get() = this.kotlinFunction?.valueParameters?.map { it.toCodeParameter() } ?: this.parameters.map { it.toCodeParameter() }
+
+val <T: Any> Constructor<T>.parameterNames: List<String>
+    get() = this.kotlinFunction?.valueParameters?.mapIndexed { i, it -> it.name ?: this.parameters[i].name } ?: this.parameters.map { it.name }
+
+val <T: Any> Constructor<T>.kotlinParameters: List<KParameter>?
+    get() = this.kotlinFunction?.valueParameters
+
+val <T: Any> Constructor<T>.codeParameters: List<CodeParameter>
     get() = this.kotlinFunction?.valueParameters?.map { it.toCodeParameter() } ?: this.parameters.map { it.toCodeParameter() }

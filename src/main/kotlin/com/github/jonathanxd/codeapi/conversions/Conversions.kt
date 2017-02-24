@@ -32,6 +32,7 @@ import com.github.jonathanxd.codeapi.CodePart
 import com.github.jonathanxd.codeapi.MutableCodeSource
 import com.github.jonathanxd.codeapi.base.*
 import com.github.jonathanxd.codeapi.base.impl.MethodSpecificationImpl
+import com.github.jonathanxd.codeapi.builder.ConstructorDeclarationBuilder
 import com.github.jonathanxd.codeapi.builder.FieldDeclarationBuilder
 import com.github.jonathanxd.codeapi.builder.MethodDeclarationBuilder
 import com.github.jonathanxd.codeapi.common.CodeParameter
@@ -43,10 +44,7 @@ import com.github.jonathanxd.codeapi.literal.Literals
 import com.github.jonathanxd.codeapi.type.CodeType
 import com.github.jonathanxd.codeapi.util.codeType
 import com.github.jonathanxd.codeapi.util.fromJavaModifiers
-import java.lang.reflect.Field
-import java.lang.reflect.Method
-import java.lang.reflect.Modifier
-import java.lang.reflect.Parameter
+import java.lang.reflect.*
 import kotlin.reflect.KParameter
 import kotlin.reflect.jvm.jvmErasure
 
@@ -335,6 +333,78 @@ fun Method.createStaticInvocation(arguments: List<CodePart>): MethodInvocation =
  */
 fun Method.createInvocationThis(arguments: List<CodePart>): MethodInvocation =
         this.createInvocation(CodeAPI.accessThis(), arguments)
+
+// Constructor
+
+/**
+ * Convert this [Method] to [MethodDeclaration].
+ *
+ * @return [MethodDeclaration].
+ */
+fun <T: Any> Constructor<T>.toConstructorDeclaration(): ConstructorDeclaration =
+        ConstructorDeclarationBuilder.builder()
+                .withModifiers(fixModifiers(this.modifiers))
+                .withParameters(this.parameters.let {
+                    val names = this.parameterNames
+
+                    it.mapIndexed { i, it ->
+                        CodeAPI.parameter(it.type, names[i])
+                    }
+                })
+                .withBody(MutableCodeSource())
+                .build()
+
+/**
+ * Convert this [Constructor] structure to [ConstructorDeclaration] structure calling super constructor with [arguments].
+ *
+ * @param arguments Arguments to pass to super constructor.
+ * @return [ConstructorDeclaration] structure from [Constructor] calling super constructor with [arguments].
+ */
+fun <T: Any> Constructor<T>.toConstructorDeclaration(arguments: List<CodePart>): ConstructorDeclaration =
+        this.toConstructorDeclaration().builder().withBody(
+                MutableCodeSource(
+                        arrayOf<CodePart>(
+                                CodeAPI.invokeSuperConstructor(
+                                        this.toTypeSpec(),
+                                        arguments
+                                )
+                        )
+                )
+        ).build()
+
+/**
+ * Convert [Constructor] to [MethodSpecification]
+ *
+ * @return [MethodSpecification] of this [Constructor].
+ */
+fun <T: Any> Constructor<T>.toSpec(): MethodSpecification =
+        MethodSpecificationImpl(
+                methodName = this.name,
+                description = CodeAPI.constructorTypeSpec(*this.parameterTypes),
+                methodType = MethodType.CONSTRUCTOR
+        )
+
+/**
+ * Convert [Method] to [TypeSpec]
+ *
+ * @return [TypeSpec] of this [Method].
+ */
+fun <T: Any> Constructor<T>.toTypeSpec(): TypeSpec = CodeAPI.constructorTypeSpec(*this.parameterTypes)
+
+/**
+ * Create a [MethodInvocation] to this [Method].
+ *
+ * @param target Target of invocation (null if method is static)
+ * @param arguments Arguments to pass to method.
+ * @return The invocation.
+ */
+fun <T: Any> Constructor<T>.createInvocation(arguments: List<CodePart>): MethodInvocation =
+        CodeAPI.invokeConstructor(
+                this.declaringClass.declaringClass.codeType,
+                this.toTypeSpec(),
+                arguments
+        )
+
 
 // Parameters And Arguments
 fun KParameter.toCodeParameter(): CodeParameter = CodeAPI.parameter(this.type.jvmErasure.codeType, this.name)
