@@ -75,7 +75,8 @@ fun <T : Any> Class<T>.toAnnotationDeclaration(): AnnotationDeclaration =
                 .build()
 
 
-fun <T : Any> Class<T>.toEnumDeclaration(): EnumDeclaration {
+@JvmOverloads
+fun <T : Any> Class<T>.toEnumDeclaration(nameProvider: (method: Method, index: Int, parameter: Parameter) -> String = { m, i, p -> m.parameterNames[i] }): EnumDeclaration {
 
     val abstractMethods = this.methods.filter { Modifier.isAbstract(it.modifiers) }
 
@@ -84,7 +85,7 @@ fun <T : Any> Class<T>.toEnumDeclaration(): EnumDeclaration {
             .map {
                 CodeAPI.enumEntry(it.name,
                         if (abstractMethods.isNotEmpty())
-                            MutableCodeSource(abstractMethods.map(Method::toMethodDeclaration))
+                            MutableCodeSource(abstractMethods.map { it.toMethodDeclaration { index, parameter -> nameProvider(it, index, parameter) } })
                         else
                             null
                 )
@@ -240,18 +241,18 @@ fun Field.createStaticAccess(): FieldAccess =
 /**
  * Convert this [Method] to [MethodDeclaration].
  *
+ * @param nameProvider Provider of parameter names.
  * @return [MethodDeclaration].
  */
-fun Method.toMethodDeclaration(): MethodDeclaration =
+@JvmOverloads
+fun Method.toMethodDeclaration(nameProvider: (index: Int, parameter: Parameter) -> String = { i, p -> this.parameterNames[i] }): MethodDeclaration =
         MethodDeclarationBuilder.builder()
                 .withModifiers(fixModifiers(this.modifiers))
                 .withName(this.name)
                 .withReturnType(this.returnType.codeType)
                 .withParameters(this.parameters.let {
-                    val names = this.parameterNames
-
                     it.mapIndexed { i, it ->
-                        CodeAPI.parameter(it.type, names[i])
+                        CodeAPI.parameter(it.type, nameProvider(i, it))
                     }
                 })
                 .withBody(MutableCodeSource())
@@ -261,10 +262,12 @@ fun Method.toMethodDeclaration(): MethodDeclaration =
  * Convert this [Method] structure to [MethodDeclaration] structure invoking the super class method.
  *
  * @param superClass super class to invoke
+ * @param nameProvider Provider of parameter names.
  * @return [MethodDeclaration] structure from [Method] invoking super class method.
  */
-fun Method.toMethodDeclaration(superClass: CodeType): MethodDeclaration =
-        this.toMethodDeclaration().builder().withBody(
+@JvmOverloads
+fun Method.toMethodDeclaration(superClass: CodeType, nameProvider: (index: Int, parameter: Parameter) -> String = { i, p -> this.parameterNames[i] }): MethodDeclaration =
+        this.toMethodDeclaration(nameProvider).builder().withBody(
                 MutableCodeSource(
                         arrayOf<CodePart>(CodeAPI.returnValue(this.returnType,
                                 CodeAPI.invoke(
@@ -281,7 +284,6 @@ fun Method.toMethodDeclaration(superClass: CodeType): MethodDeclaration =
 /**
  * Convert [Method] to [MethodSpecification] with [arguments]
  *
- * @param arguments Arguments to pass to method
  * @return [MethodSpecification] of this [Method].
  */
 fun Method.toSpec(): MethodSpecification =
@@ -339,16 +341,16 @@ fun Method.createInvocationThis(arguments: List<CodePart>): MethodInvocation =
 /**
  * Convert this [Method] to [MethodDeclaration].
  *
+ * @param nameProvider Provider of parameter names.
  * @return [MethodDeclaration].
  */
-fun <T: Any> Constructor<T>.toConstructorDeclaration(): ConstructorDeclaration =
+@JvmOverloads
+fun <T : Any> Constructor<T>.toConstructorDeclaration(nameProvider: (index: Int, parameter: Parameter) -> String = { i, p -> this.parameterNames[i] }): ConstructorDeclaration =
         ConstructorDeclarationBuilder.builder()
                 .withModifiers(fixModifiers(this.modifiers))
                 .withParameters(this.parameters.let {
-                    val names = this.parameterNames
-
                     it.mapIndexed { i, it ->
-                        CodeAPI.parameter(it.type, names[i])
+                        CodeAPI.parameter(it.type, nameProvider(i, it))
                     }
                 })
                 .withBody(MutableCodeSource())
@@ -358,10 +360,12 @@ fun <T: Any> Constructor<T>.toConstructorDeclaration(): ConstructorDeclaration =
  * Convert this [Constructor] structure to [ConstructorDeclaration] structure calling super constructor with [arguments].
  *
  * @param arguments Arguments to pass to super constructor.
+ * @param nameProvider Provider of parameter names.
  * @return [ConstructorDeclaration] structure from [Constructor] calling super constructor with [arguments].
  */
-fun <T: Any> Constructor<T>.toConstructorDeclaration(arguments: List<CodePart>): ConstructorDeclaration =
-        this.toConstructorDeclaration().builder().withBody(
+@JvmOverloads
+fun <T : Any> Constructor<T>.toConstructorDeclaration(arguments: List<CodePart>, nameProvider: (index: Int, parameter: Parameter) -> String = { i, p -> this.parameterNames[i] }): ConstructorDeclaration =
+        this.toConstructorDeclaration(nameProvider).builder().withBody(
                 MutableCodeSource(
                         arrayOf<CodePart>(
                                 CodeAPI.invokeSuperConstructor(
@@ -377,7 +381,7 @@ fun <T: Any> Constructor<T>.toConstructorDeclaration(arguments: List<CodePart>):
  *
  * @return [MethodSpecification] of this [Constructor].
  */
-fun <T: Any> Constructor<T>.toSpec(): MethodSpecification =
+fun <T : Any> Constructor<T>.toSpec(): MethodSpecification =
         MethodSpecificationImpl(
                 methodName = this.name,
                 description = CodeAPI.constructorTypeSpec(*this.parameterTypes),
@@ -389,7 +393,7 @@ fun <T: Any> Constructor<T>.toSpec(): MethodSpecification =
  *
  * @return [TypeSpec] of this [Method].
  */
-fun <T: Any> Constructor<T>.toTypeSpec(): TypeSpec = CodeAPI.constructorTypeSpec(*this.parameterTypes)
+fun <T : Any> Constructor<T>.toTypeSpec(): TypeSpec = CodeAPI.constructorTypeSpec(*this.parameterTypes)
 
 /**
  * Create a [MethodInvocation] to this [Method].
@@ -398,7 +402,7 @@ fun <T: Any> Constructor<T>.toTypeSpec(): TypeSpec = CodeAPI.constructorTypeSpec
  * @param arguments Arguments to pass to method.
  * @return The invocation.
  */
-fun <T: Any> Constructor<T>.createInvocation(arguments: List<CodePart>): MethodInvocation =
+fun <T : Any> Constructor<T>.createInvocation(arguments: List<CodePart>): MethodInvocation =
         CodeAPI.invokeConstructor(
                 this.declaringClass.declaringClass.codeType,
                 this.toTypeSpec(),
